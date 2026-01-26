@@ -1,7 +1,7 @@
 title: GA App Documentation
 description: Documentation for the GA App project
 theme: jekyll-theme-minimal
-baseurl: ""
+baseurl: "/ga_app"
 url: ""
 markdown: kramdown
 
