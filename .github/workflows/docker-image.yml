@@ -26,5 +26,7 @@ jobs:
       
       - name: Build and Push
         run: |
-          docker build --target production -t ghcr.io/${{ github.repository_owner | toLowerCase }}/ga_app:latest .
-          docker push ghcr.io/${{ github.repository_owner | toLowerCase }}/ga_app:latest
+          IMAGE="ghcr.io/$(echo $GITHUB_REPOSITORY | tr '[:upper:]' '[:lower:]'):latest"
+          echo "Using image $IMAGE"
+          docker build --target production -t $IMAGE .
+          docker push $IMAGE
