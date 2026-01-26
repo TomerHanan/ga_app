@@ -27,7 +27,7 @@ WORKDIR /app
 COPY requirements.txt .
 
 # Install only production dependencies
-RUN pip install -r requirements.txt --no-dev --no-cache-dir
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy only application code (not tests)
 COPY main.py .
