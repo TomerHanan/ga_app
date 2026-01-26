@@ -26,5 +26,5 @@ jobs:
       
       - name: Build and Push
         run: |
-          docker build --target production -t ghcr.io/${{ github.repository }}:latest .
-          docker push ghcr.io/${{ github.repository }}:latest
+          docker build --target production -t ghcr.io/${{ github.repository_owner | toLowerCase }}/ga_app:latest .
+          docker push ghcr.io/${{ github.repository_owner | toLowerCase }}/ga_app:latest
