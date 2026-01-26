@@ -10,12 +10,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Build Docker image
-        run: |
-          docker build -t fastapi-demo:test .
+        run: docker build -t fastapi-demo:test .
 
       - name: Run container
         run: |
@@ -24,15 +22,25 @@ jobs:
             --name fastapi_test \
             fastapi-demo:test
 
+      - name: Wait for API to be ready
+        run: |
+          for i in {1..10}; do
+            if curl -s http://localhost:8000/health; then
+              exit 0
+            fi
+            echo "Waiting for API..."
+            sleep 2
+          done
+          docker logs fastapi_test
+          exit 1
+
       - name: Test API endpoint
         run: |
           curl -f "http://localhost:8000/api/v1/hello?name=CI"
 
-      - name: Show container logs (on success too)
-        run: |
-          docker logs fastapi_test
+      - name: Show container logs
+        run: docker logs fastapi_test
 
       - name: Cleanup
         if: always()
-        run: |
-          docker rm -f fastapi_test
+        run: docker rm -f fastapi_test
