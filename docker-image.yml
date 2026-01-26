@@ -1,0 +1,38 @@
+name: Docker Build and Test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+jobs:
+  docker-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build -t fastapi-demo:test .
+
+      - name: Run container
+        run: |
+          docker run -d \
+            -p 8000:8000 \
+            --name fastapi_test \
+            fastapi-demo:test
+
+      - name: Test API endpoint
+        run: |
+          curl -f "http://localhost:8000/api/v1/hello?name=CI"
+
+      - name: Show container logs (on success too)
+        run: |
+          docker logs fastapi_test
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f fastapi_test
