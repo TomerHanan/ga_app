@@ -1,8 +1,8 @@
 title: GA App Documentation
 description: Documentation for the GA App project
 theme: jekyll-theme-minimal
-baseurl: "/ga_app"
-url: "https://yourusername.github.io"
+baseurl: ""
+url: ""
 markdown: kramdown
 
 # Collections
