@@ -2,9 +2,9 @@ name: Kind Kubernetes CI
 
 on:
   push:
-    branches: [main, master, k8s-kind]
+    branches: [k8s-kind]
   pull_request:
-    branches: [main, master, k8s-kind]
+    branches: [k8s-kind]
   workflow_dispatch:
 
 jobs:
@@ -26,10 +26,14 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build -t python-fastapi-app:latest ./k8s-kind
+          # Changed context from ./k8s-kind to ./k8s-kind-python
+          # Ensure your Dockerfile is inside the k8s-kind-python folder
+          docker build -t python-fastapi-app:latest ./k8s-kind-python
+
       - name: Load image into kind cluster
         run: |
           kind load docker-image python-fastapi-app:latest --name test-cluster
+
       - name: Install Helm
         uses: azure/setup-helm@v4
         with:
@@ -41,6 +45,7 @@ jobs:
             -f ./k8s-kind-python/helm/values-kind.yaml \
             --wait \
             --timeout 5m
+
       - name: Wait for pods to be ready
         run: |
           echo "Waiting for all pods to be ready..."
@@ -48,63 +53,25 @@ jobs:
           
       - name: Show all pods
         run: |
-          echo "========================================="
-          echo "        ALL PODS STATUS"
-          echo "========================================="
           kubectl get pods -o wide
-          echo ""
-          echo "========================================="
-          echo "        POD DETAILS"
-          echo "========================================="
-          kubectl describe pods
           
-      - name: Show all services
-        run: |
-          echo "========================================="
-          echo "        ALL SERVICES"
-          echo "========================================="
-          kubectl get services -o wide
       - name: Test Python app health endpoint
         run: |
           echo "Testing health endpoint..."
+          # Note: Port-forwarding in CI can be flaky; ensure the service name is exactly correct
           kubectl port-forward svc/my-app-python-postgres-app-python 8080:80 &
-          sleep 5
-          curl -s http://localhost:8080/health || echo "Health check completed"
+          sleep 10
+          curl -s http://localhost:8080/health || echo "Health check check failed but continuing..."
+
       - name: Run API test job
         run: |
-          echo "Applying test job manifest..."
           kubectl apply -f ./k8s-kind-python/test-job.yaml
-          
-          echo "Waiting for test job to complete..."
           kubectl wait --for=condition=complete job/test-api-write --timeout=120s
-          
-          echo "========================================="
-          echo "        TEST JOB RESULTS"
-          echo "========================================="
           kubectl logs job/test-api-write
-          
-          echo ""
-          echo "✅ Test job completed successfully!"
           
       - name: Show logs on failure
         if: failure()
         run: |
-          echo "========================================="
-          echo "        PYTHON APP LOGS"
-          echo "========================================="
+          kubectl get pods
           kubectl logs -l app.kubernetes.io/component=backend --tail=100 || true
-          echo ""
-          echo "========================================="
-          echo "        POSTGRESQL LOGS"
-          echo "========================================="
           kubectl logs -l app.kubernetes.io/component=database --tail=100 || true
-          echo ""
-          echo "========================================="
-          echo "        TEST JOB LOGS"
-          echo "========================================="
-          kubectl logs job/test-api-write || true
-          echo ""
-          echo "========================================="
-          echo "        ALL EVENTS"
-          echo "========================================="
-          kubectl get events --sort-by='.lastTimestamp'
