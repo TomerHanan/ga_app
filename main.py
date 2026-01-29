@@ -1,35 +1,50 @@
-from fastapi import FastAPI
+import os
+import psycopg2
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 app = FastAPI()
 
+# Students will need to figure out how to pass these via Kubernetes Env Vars
+DB_NAME = os.getenv("POSTGRES_DB", "postgres")
+DB_USER = os.getenv("POSTGRES_USER", "postgres")
+DB_PASS = os.getenv("POSTGRES_PASSWORD", "password")
+DB_HOST = os.getenv("POSTGRES_HOST", "localhost")
 
-class Item(BaseModel):
-    name: str
-    description: str = None
-    price: float
-    tax: float = None
+def get_db_connection():
+    return psycopg2.connect(
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASS,
+        host=DB_HOST
+    )
 
+class Record(BaseModel):
+    message: str
 
-@app.get("/")
-async def root():
-    return {"message": "Hello World"}
+@app.on_event("startup")
+def setup_db():
+    """Ensures the table exists on startup."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("CREATE TABLE IF NOT EXISTS logs (id SERIAL PRIMARY KEY, message TEXT);")
+    conn.commit()
+    cur.close()
+    conn.close()
 
+@app.get("/health")
+def health():
+    return {"status": "up"}
 
-@app.get("/items/{item_id}")
-async def read_item(item_id: int, q: str = None):
-    return {"item_id": item_id, "q": q}
-
-
-@app.post("/items/")
-async def create_item(item: Item):
-    item_dict = item.dict()
-    if item.tax:
-        price_with_tax = item.price + item.tax
-        item_dict.update({"price_with_tax": price_with_tax})
-    return item_dict
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+@app.post("/write")
+def write_to_db(record: Record):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("INSERT INTO logs (message) VALUES (%s)", (record.message,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"status": "success", "inserted": record.message}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
