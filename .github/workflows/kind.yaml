@@ -1,28 +1,110 @@
-name: Kind Cluster CI
+name: Kind Kubernetes CI
 
 on:
   push:
-    branches:
-      - k8s-kind
+    branches: [main, master, k8s-kind]
   pull_request:
-    branches:
-      - k8s-kind
+    branches: [main, master, k8s-kind]
+  workflow_dispatch:
 
 jobs:
-  test-cluster:
+  deploy-to-kind:
     runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Create k8s Kind Cluster
-        uses: helm/kind-action@v1.13.0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Verify cluster creation with kubectl
-        run: kubectl cluster-info
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: test-cluster
+          wait: 120s
 
-      - name: List all nodes
-        run: kubectl get nodes
+      - name: Build Docker image
+        run: |
+          docker build -t python-fastapi-app:latest ./k8s-kind-python
+      - name: Load image into kind cluster
+        run: |
+          kind load docker-image python-fastapi-app:latest --name test-cluster
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'latest'
 
-      - name: Run application tests (example step)
-        run: echo "Tests run successfully against the Kind cluster"
+      - name: Deploy with Helm
+        run: |
+          helm install my-app ./k8s-kind-python/helm \
+            -f ./k8s-kind-python/helm/values-kind.yaml \
+            --wait \
+            --timeout 5m
+      - name: Wait for pods to be ready
+        run: |
+          echo "Waiting for all pods to be ready..."
+          kubectl wait --for=condition=ready pod --all --timeout=300s
+          
+      - name: Show all pods
+        run: |
+          echo "========================================="
+          echo "        ALL PODS STATUS"
+          echo "========================================="
+          kubectl get pods -o wide
+          echo ""
+          echo "========================================="
+          echo "        POD DETAILS"
+          echo "========================================="
+          kubectl describe pods
+          
+      - name: Show all services
+        run: |
+          echo "========================================="
+          echo "        ALL SERVICES"
+          echo "========================================="
+          kubectl get services -o wide
+      - name: Test Python app health endpoint
+        run: |
+          echo "Testing health endpoint..."
+          kubectl port-forward svc/my-app-python-postgres-app-python 8080:80 &
+          sleep 5
+          curl -s http://localhost:8080/health || echo "Health check completed"
+      - name: Run API test job
+        run: |
+          echo "Applying test job manifest..."
+          kubectl apply -f ./k8s-kind-python/test-job.yaml
+          
+          echo "Waiting for test job to complete..."
+          kubectl wait --for=condition=complete job/test-api-write --timeout=120s
+          
+          echo "========================================="
+          echo "        TEST JOB RESULTS"
+          echo "========================================="
+          kubectl logs job/test-api-write
+          
+          echo ""
+          echo "✅ Test job completed successfully!"
+          
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "========================================="
+          echo "        PYTHON APP LOGS"
+          echo "========================================="
+          kubectl logs -l app.kubernetes.io/component=backend --tail=100 || true
+          echo ""
+          echo "========================================="
+          echo "        POSTGRESQL LOGS"
+          echo "========================================="
+          kubectl logs -l app.kubernetes.io/component=database --tail=100 || true
+          echo ""
+          echo "========================================="
+          echo "        TEST JOB LOGS"
+          echo "========================================="
+          kubectl logs job/test-api-write || true
+          echo ""
+          echo "========================================="
+          echo "        ALL EVENTS"
+          echo "========================================="
+          kubectl get events --sort-by='.lastTimestamp'
