@@ -1,0 +1,28 @@
+name: Kind Cluster CI
+
+on:
+  push:
+    branches:
+      - k8s-kind
+  pull_request:
+    branches:
+      - k8s-kind
+
+jobs:
+  test-cluster:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create k8s Kind Cluster
+        uses: helm/kind-action@v1.13.0
+
+      - name: Verify cluster creation with kubectl
+        run: kubectl cluster-info
+
+      - name: List all nodes
+        run: kubectl get nodes
+
+      - name: Run application tests (example step)
+        run: echo "Tests run successfully against the Kind cluster"
