@@ -28,7 +28,7 @@ jobs:
         run: |
           # Changed context from ./k8s-kind to ./k8s-kind-python
           # Ensure your Dockerfile is inside the k8s-kind-python folder
-          docker build -t python-fastapi-app:latest ./k8s-kind-python
+          docker build -t python-fastapi-app:latest ./k8s-kind
 
       - name: Load image into kind cluster
         run: |
